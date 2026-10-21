@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Lock, User, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Truck, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -17,18 +17,13 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login({ username, password });
+      await login({ username: username.trim(), password });
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid credentials. Please verify your login.');
+      setError(err.response?.data?.error || 'Invalid username or password. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickFill = (u: string, p: string = '123456') => {
-    setUsername(u);
-    setPassword(p);
   };
 
   return (
@@ -71,10 +66,11 @@ export const LoginPage: React.FC = () => {
                 <input
                   type="text"
                   required
+                  autoFocus
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin / ghazipur / okhla / bhalaswa / monitoring"
-                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  placeholder="Enter your username"
+                  className="block w-full pl-9 pr-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
                 />
               </div>
             </div>
@@ -92,8 +88,8 @@ export const LoginPage: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  placeholder="Enter your password"
+                  className="block w-full pl-9 pr-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
                 />
               </div>
             </div>
@@ -108,49 +104,10 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Preset Selector for Easy Testing */}
-          <div className="mt-6 pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>Select Preset Account (Password: 123456):</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickFill('admin')}
-                className="px-2.5 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-left transition-colors border border-slate-200 truncate"
-              >
-                1. Master Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('monitoring')}
-                className="px-2.5 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-left transition-colors border border-slate-200 truncate"
-              >
-                2. Central Monitoring
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('ghazipur')}
-                className="px-2.5 py-1.5 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-900 font-semibold text-left transition-colors border border-blue-200 truncate"
-              >
-                3. Ghazipur Op
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('okhla')}
-                className="px-2.5 py-1.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-semibold text-left transition-colors border border-emerald-200 truncate"
-              >
-                4. Okhla Op
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickFill('bhalaswa')}
-                className="px-2.5 py-1.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-left transition-colors border border-amber-200 truncate col-span-2"
-              >
-                5. Bhalaswa Op
-              </button>
-            </div>
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+            <p className="text-[11px] text-slate-400 font-medium">
+              Municipal Corporation of Delhi (MCD) &bull; Authorized Access Only
+            </p>
           </div>
         </div>
       </div>
