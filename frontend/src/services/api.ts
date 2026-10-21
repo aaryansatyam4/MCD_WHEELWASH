@@ -7,8 +7,12 @@ import type {
   AuditLog,
 } from '../types/index.js';
 
+// Base URL configured from .env (VITE_API_URL) or fallback to relative '/api'
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+const API_BASE_URL = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -147,9 +151,7 @@ export const reportService = {
   },
   downloadExport: (params: { format: 'csv' | 'excel'; type: string; date?: string; startDate?: string; endDate?: string; month?: string; year?: string; locationId?: number }) => {
     const query = new URLSearchParams(params as any).toString();
-    const token = localStorage.getItem('ww_token');
-    // Using window.open or fetch blob
-    return `/api/reports/export?${query}`;
+    return `${BACKEND_URL}/api/reports/export?${query}`;
   },
 };
 

@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../contexts/AuthContext.js';
 import { useSocket } from '../contexts/SocketContext.js';
 import { ChangePasswordModal } from '../components/ChangePasswordModal.js';
+import { BACKEND_URL } from '../services/api.js';
 
 export const MainLayout: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -244,7 +245,7 @@ export const MainLayout: React.FC = () => {
 
               {/* Direct Excel DB Quick Link */}
               <a
-                href="/public/database.xlsx"
+                href={`${BACKEND_URL}/public/database.xlsx`}
                 download="wheelwash_database.xlsx"
                 className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors shadow-xs"
               >
