@@ -70,7 +70,7 @@ class ExcelDatabase {
         role: 'admin',
         assigned_location_id: null,
         active: 1,
-        must_change_password: 1,
+        must_change_password: 0,
         created_at: timestamp,
         last_login: null,
       },
@@ -81,7 +81,7 @@ class ExcelDatabase {
         role: 'operator',
         assigned_location_id: 1,
         active: 1,
-        must_change_password: 1,
+        must_change_password: 0,
         created_at: timestamp,
         last_login: null,
       },
@@ -92,7 +92,7 @@ class ExcelDatabase {
         role: 'operator',
         assigned_location_id: 2,
         active: 1,
-        must_change_password: 1,
+        must_change_password: 0,
         created_at: timestamp,
         last_login: null,
       },
@@ -103,7 +103,7 @@ class ExcelDatabase {
         role: 'operator',
         assigned_location_id: 3,
         active: 1,
-        must_change_password: 1,
+        must_change_password: 0,
         created_at: timestamp,
         last_login: null,
       },
@@ -114,7 +114,7 @@ class ExcelDatabase {
         role: 'monitoring',
         assigned_location_id: null,
         active: 1,
-        must_change_password: 1,
+        must_change_password: 0,
         created_at: timestamp,
         last_login: null,
       },
@@ -612,7 +612,9 @@ class ExcelDatabase {
 
   // Audit Logs
   public getAuditLogs(): AuditLog[] {
-    return [...this.auditLogs].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return this.auditLogs
+      .filter((l) => l.action !== 'COUNT_ADJUSTMENT')
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
 
   public recordAuditLog(log: Omit<AuditLog, 'id'>): AuditLog {
