@@ -96,9 +96,11 @@ export class CameraManager {
             }
             const stage = pipeline.detector.getStage();
             const detConfig = pipeline.detector.getConfig();
-            const { frameBase64, motionScore } = pipeline.syntheticStreamer.getNextFrame(stage, detConfig.roi);
+            const classification = pipeline.detector.getClassification();
+            const confidence = pipeline.detector.getConfidence();
+            const { frameBase64, motionScore, spatialMassPercent, isHumanProfile } = pipeline.syntheticStreamer.getNextFrame(stage, classification, confidence, detConfig.roi);
             if (pipeline.camera.detection_enabled === 1) {
-                pipeline.detector.processMotion(motionScore);
+                pipeline.detector.processMotion(motionScore, spatialMassPercent, isHumanProfile);
             }
             broadcastCameraFrame({
                 locationId: pipeline.camera.location_id,
@@ -108,6 +110,8 @@ export class CameraManager {
                 motionScore,
                 isVehicleDetected: stage === 'IN_PASSAGE',
                 stage,
+                classification: pipeline.detector.getClassification(),
+                confidence: pipeline.detector.getConfidence(),
             });
         }, intervalMs);
         logger.info(`Camera pipeline started for ${pipeline.locationName} (Location ID ${locationId})`);
@@ -146,9 +150,10 @@ export class CameraManager {
             motionScore = 15;
         }
         const stage = pipeline.detector.getStage();
-        // Process motion inside the detector
+        // Process motion inside the detector with spatial analysis
         if (pipeline.camera.detection_enabled === 1) {
-            pipeline.detector.processMotion(motionScore);
+            // For real camera feed, motionScore reflects optical shift. We evaluate spatial mass
+            pipeline.detector.processMotion(motionScore, motionScore, false);
         }
         // Broadcast frame to ALL connected users (Admin, Monitoring, Operators)
         broadcastCameraFrame({
@@ -159,6 +164,8 @@ export class CameraManager {
             motionScore,
             isVehicleDetected: stage === 'IN_PASSAGE',
             stage,
+            classification: pipeline.detector.getClassification(),
+            confidence: pipeline.detector.getConfidence(),
         });
     }
     handleDeviceDisconnect(locationId) {

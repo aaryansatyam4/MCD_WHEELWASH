@@ -29,10 +29,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [latestSummary, setLatestSummary] = useState<DashboardSummary | null>(null);
 
   useEffect(() => {
-    // Create Socket.io connection to backend
-    const socketInstance = io({
+    // In dev mode (port 5173), connect directly to backend (5001) for rock-solid stability; in production connect to same origin
+    const socketUrl = window.location.port === '5173' ? 'http://127.0.0.1:5001' : undefined;
+
+    const socketInstance = io(socketUrl, {
       transports: ['websocket', 'polling'],
       auth: { token: token ? `Bearer ${token}` : undefined },
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
     });
 
     socketInstance.on('connect', () => {

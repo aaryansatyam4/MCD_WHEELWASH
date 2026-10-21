@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import { config } from './config/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 // Route imports
@@ -41,6 +43,22 @@ export function createApp() {
     app.use('/api/users', userRoutes);
     app.use('/api/audit-logs', auditRoutes);
     app.use('/api/demo', demoRoutes);
+    // Production Frontend Static File Serving
+    const possibleDistPaths = [
+        path.resolve(process.cwd(), '../frontend/dist'),
+        path.resolve(process.cwd(), 'frontend/dist'),
+        path.resolve(process.cwd(), 'dist/frontend'),
+    ];
+    const distDir = possibleDistPaths.find((p) => fs.existsSync(p));
+    if (distDir) {
+        app.use(express.static(distDir));
+        app.get('*', (req, res, next) => {
+            if (req.path.startsWith('/api') || req.path.startsWith('/public') || req.path.startsWith('/socket.io')) {
+                return next();
+            }
+            res.sendFile(path.join(distDir, 'index.html'));
+        });
+    }
     // Centralized Error Handling
     app.use(errorHandler);
     return app;
