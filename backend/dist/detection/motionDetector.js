@@ -7,20 +7,36 @@ export class MotionDetector {
     classification = 'NONE';
     zoneEnteredAt = 0;
     lastPassageAt = 0;
+    lastTruckDetectedAt = 0;
+    truckEvidenceCount = 0;
     zoneClearedAt = 0;
     confidence = 0;
     onVehicleDetectedCallback;
     constructor(locationId, locationName, config, onVehicleDetected) {
         this.locationId = locationId;
         this.locationName = locationName;
-        this.config = {
-            minTruckAreaPercent: 35, // Minimum 35% spatial ROI mass required for truck
-            ...config,
-        };
+        const minDur = config.minDurationMs && config.minDurationMs <= 600 ? config.minDurationMs : 400;
+        this.config = Object.assign({
+            minTruckAreaPercent: 30,
+            cooldownSeconds: 4,
+            sensitivity: 60,
+            minDurationMs: 400,
+            direction: 'any',
+            roi: { x: 20, y: 35, width: 60, height: 45 },
+        }, config);
+        if (minDur) {
+            this.config.minDurationMs = minDur;
+        }
+        if (this.config.minDurationMs > 600) {
+            this.config.minDurationMs = 400;
+        }
         this.onVehicleDetectedCallback = onVehicleDetected;
     }
     updateConfig(newConfig) {
         this.config = { ...this.config, ...newConfig };
+        if (this.config.minDurationMs > 600) {
+            this.config.minDurationMs = 400;
+        }
         logger.info(`Updated detection config for ${this.locationName}:`, this.config);
     }
     getConfig() {
@@ -44,20 +60,30 @@ export class MotionDetector {
     processMotion(motionScore, spatialMassPercent = motionScore, isHumanProfile = false) {
         const now = Date.now();
         let triggered = false;
-        const threshold = this.config.sensitivity; // e.g. 65
+        const threshold = this.config.sensitivity || 60;
         const isMotionSignificant = motionScore >= threshold;
-        const minTruckMass = this.config.minTruckAreaPercent || 35;
-        // Classification Logic:
-        // If motion is significant but spatial mass is small (< 30%) or aspect ratio indicates human pedestrian:
+        const minTruckMass = this.config.minTruckAreaPercent || 30;
+        // Strict Human vs Heavy Truck Classification:
+        // A Human/Worker is characterized by:
+        // 1) Explicit isHumanProfile flag (tall narrow aspect ratio), OR
+        // 2) Significant motion but spatial mass too small for a commercial vehicle (< minTruckMass)
         const isHumanDetected = isMotionSignificant && (isHumanProfile || spatialMassPercent < minTruckMass);
+        // A Heavy Truck is characterized by:
+        // Broad, heavy mass (>= minTruckMass) AND NOT having a human profile
         const isTruckDetected = isMotionSignificant && !isHumanProfile && spatialMassPercent >= minTruckMass;
         if (isHumanDetected) {
             this.classification = 'HUMAN_IGNORED';
-            this.confidence = Math.min(95, 75 + Math.round((30 - spatialMassPercent) * 0.8));
+            this.confidence = Math.min(96, Math.max(80, Math.round(95 - spatialMassPercent * 0.5)));
         }
         else if (isTruckDetected) {
             this.classification = 'TRUCK_VERIFIED';
-            this.confidence = Math.min(99, 82 + Math.round(spatialMassPercent * 0.16));
+            this.confidence = Math.min(99, Math.max(85, Math.round(82 + spatialMassPercent * 0.16)));
+        }
+        else if (this.stage === 'IN_PASSAGE') {
+            this.classification = 'TRUCK_VERIFIED';
+        }
+        else if (this.stage === 'COOLDOWN') {
+            this.classification = 'TRUCK_VERIFIED';
         }
         else {
             this.classification = 'NONE';
@@ -65,20 +91,32 @@ export class MotionDetector {
         }
         switch (this.stage) {
             case 'IDLE':
-                if (isTruckDetected) {
+                if (isHumanDetected) {
+                    // Human/worker in zone: STRICT FILTER - Never trigger entry or increment counter
+                    this.stage = 'IDLE';
+                    this.truckEvidenceCount = 0;
+                    logger.debug(`[PEDESTRIAN FILTER] Human motion filtered at ${this.locationName} (Mass: ${spatialMassPercent}%, Motion: ${motionScore}%) - Counter Ignored`);
+                }
+                else if (isTruckDetected) {
                     this.stage = 'ENTERED_ZONE';
                     this.zoneEnteredAt = now;
-                }
-                else if (isHumanDetected) {
-                    // Human detected in zone: Log filter and DO NOT trigger entry
-                    logger.debug(`[PEDESTRIAN FILTER] Human motion filtered at ${this.locationName} (Mass: ${spatialMassPercent}%, Motion: ${motionScore}%) - Counter Ignored`);
+                    this.lastTruckDetectedAt = now;
+                    this.truckEvidenceCount = 1;
                 }
                 break;
             case 'ENTERED_ZONE':
-                if (isTruckDetected) {
+                if (isHumanDetected) {
+                    // If human profile is detected during entry, cancel truck entry immediately!
+                    this.stage = 'IDLE';
+                    this.truckEvidenceCount = 0;
+                    logger.debug(`[PEDESTRIAN OVERRIDE] Entered zone cancelled by pedestrian detection at ${this.locationName}`);
+                }
+                else if (isTruckDetected) {
+                    this.lastTruckDetectedAt = now;
+                    this.truckEvidenceCount++;
                     const duration = now - this.zoneEnteredAt;
-                    if (duration >= this.config.minDurationMs) {
-                        // Valid heavy vehicle verified!
+                    // Trigger confirmed count when duration reached and at least 2 consecutive positive frames
+                    if (duration >= this.config.minDurationMs && this.truckEvidenceCount >= 2) {
                         this.stage = 'IN_PASSAGE';
                         this.lastPassageAt = now;
                         triggered = true;
@@ -89,18 +127,28 @@ export class MotionDetector {
                     }
                 }
                 else {
-                    // Dropped before duration or human profile took over
-                    this.stage = 'IDLE';
+                    // Motion momentarily dipped. Allow 800ms grace window before dropping
+                    const timeSinceTruck = now - this.lastTruckDetectedAt;
+                    if (timeSinceTruck > 800) {
+                        this.stage = 'IDLE';
+                        this.truckEvidenceCount = 0;
+                    }
                 }
                 break;
             case 'IN_PASSAGE':
-                if (!isMotionSignificant) {
-                    this.stage = 'COOLDOWN';
-                    this.zoneClearedAt = now;
+                if (isMotionSignificant && isTruckDetected) {
+                    this.lastTruckDetectedAt = now;
+                }
+                else {
+                    const timeSinceMotion = now - this.lastTruckDetectedAt;
+                    if (timeSinceMotion > 400) {
+                        this.stage = 'COOLDOWN';
+                        this.zoneClearedAt = now;
+                    }
                 }
                 break;
             case 'COOLDOWN':
-                if (isMotionSignificant) {
+                if (isMotionSignificant && isTruckDetected) {
                     this.zoneClearedAt = now;
                 }
                 else {
@@ -108,6 +156,7 @@ export class MotionDetector {
                     if (clearDuration >= this.config.cooldownSeconds) {
                         this.stage = 'IDLE';
                         this.classification = 'NONE';
+                        this.truckEvidenceCount = 0;
                     }
                 }
                 break;
@@ -123,6 +172,8 @@ export class MotionDetector {
         this.stage = 'IDLE';
         this.classification = 'NONE';
         this.zoneEnteredAt = 0;
+        this.lastTruckDetectedAt = 0;
+        this.truckEvidenceCount = 0;
         this.zoneClearedAt = 0;
     }
 }

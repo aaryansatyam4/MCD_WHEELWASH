@@ -106,6 +106,7 @@ describe('Motion Detection & Vehicle vs Human Classification', () => {
     expect(triggeredCount).toBe(1);
 
     // 3. Cooldown duplicate prevention
+    await new Promise((resolve) => setTimeout(resolve, 450));
     detector.processMotion(10, 5, false);
     expect(detector.getStage()).toBe('COOLDOWN');
     expect(triggeredCount).toBe(1);

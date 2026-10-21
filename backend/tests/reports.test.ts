@@ -78,4 +78,14 @@ describe('Reports & Export Engine', () => {
     expect(res.headers['content-type']).toContain('spreadsheetml.sheet');
     expect(res.body).toBeDefined();
   });
+
+  it('daily report includes vehiclePassages with exact crossing timings', async () => {
+    const res = await request(app)
+      .get('/api/reports/daily?date=2026-10-21')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.vehiclePassages).toBeDefined();
+    expect(Array.isArray(res.body.vehiclePassages)).toBe(true);
+  });
 });

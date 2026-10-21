@@ -8,6 +8,10 @@ import {
   Filter,
   RefreshCw,
   Table,
+  Clock,
+  Truck,
+  CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -342,6 +346,99 @@ export const ReportsPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Individual Truck Passage Timings Log */}
+      {reportData && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-600" />
+                Truck Passage Timings Log
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Exact passage timestamps recorded when verified heavy trucks traversed the wheel-wash bay (Asia/Kolkata)
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold self-start sm:self-auto font-mono">
+              <Truck className="w-3.5 h-3.5" />
+              <span>{reportData.vehiclePassages?.length || 0} Verified Crossings</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 text-xs">
+              <thead className="bg-slate-50/80">
+                <tr>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Passage #</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Crossing Time (IST)</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Location</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Classification</th>
+                  <th className="px-4 py-3 text-left font-bold text-slate-600 uppercase tracking-wider">Detection Source</th>
+                  <th className="px-4 py-3 text-right font-bold text-slate-600 uppercase tracking-wider">Wash Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-mono">
+                {reportData.vehiclePassages && reportData.vehiclePassages.length > 0 ? (
+                  reportData.vehiclePassages.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-slate-500 font-bold">
+                        #{p.passageNumber}
+                      </td>
+                      <td className="px-4 py-3 text-slate-900 font-black">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          <Clock className="w-3 h-3 text-blue-600" />
+                          {p.time}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-medium">
+                        {p.date}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded font-sans font-bold text-[11px] ${
+                            p.locationName?.toUpperCase() === 'GHAZIPUR'
+                              ? 'bg-blue-100 text-blue-800'
+                              : p.locationName?.toUpperCase() === 'OKHLA'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {p.locationName}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700 font-sans font-semibold">
+                        {p.vehicleType || 'Heavy Commercial Truck'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-sans">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                          <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                          {p.detectionSource || 'Live CCTV AI'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-sans">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          {p.status || 'WASHED & RECORDED'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 font-sans">
+                      <Truck className="w-8 h-8 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
+                      <p className="font-semibold text-slate-600">No truck passages recorded for this period.</p>
+                      <p className="text-xs text-slate-400 mt-1">Crossings will automatically appear here as trucks pass through the wheel-wash.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

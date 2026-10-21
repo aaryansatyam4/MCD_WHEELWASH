@@ -8,7 +8,43 @@ import {
 
 export class ReportService {
   /**
-   * Daily Report: Hourly distribution + daily totals
+   * Helper: Retrieve individual vehicle passages with timing and classification
+   */
+  private static getPassagesForDateFilter(
+    filterFn: (datePart: string, fullTimestamp: string) => boolean,
+    locationId?: number
+  ) {
+    const locMap = new Map(db.getLocations().map((l) => [l.id, l.name]));
+    const events = db.getVehicleEvents().filter((e) => {
+      const matchLoc = locationId ? e.location_id === locationId : true;
+      const parts = e.event_timestamp.split(' ');
+      const datePart = parts[0];
+      return matchLoc && filterFn(datePart, e.event_timestamp);
+    });
+
+    return events
+      .sort((a, b) => b.event_timestamp.localeCompare(a.event_timestamp))
+      .map((e, idx) => {
+        const parts = e.event_timestamp.split(' ');
+        const datePart = parts[0];
+        const timePart = parts[1] || parts[0];
+        return {
+          id: e.id,
+          passageNumber: events.length - idx,
+          locationId: e.location_id,
+          locationName: locMap.get(e.location_id) || `Site #${e.location_id}`,
+          timestamp: e.event_timestamp,
+          time: timePart,
+          date: datePart,
+          detectionSource: e.detection_source === 'automatic' ? 'Live CCTV AI' : 'Simulation',
+          vehicleType: 'Heavy Commercial Truck',
+          status: 'WASHED & COUNTED',
+        };
+      });
+  }
+
+  /**
+   * Daily Report: Hourly distribution + daily totals + individual passage timings
    */
   public static getDailyReport(dateStr: string = getKolkataDateString(), locationId?: number) {
     const locations = db.getLocations().filter((l) => (locationId ? l.id === locationId : true));
@@ -26,6 +62,7 @@ export class ReportService {
     });
 
     const totalTrucks = locationTotals.reduce((sum, l) => sum + l.total, 0);
+    const vehiclePassages = ReportService.getPassagesForDateFilter((d) => d === dateStr, locationId);
 
     return {
       type: 'daily',
@@ -33,11 +70,12 @@ export class ReportService {
       locations: locationTotals,
       totalTrucks,
       hourlyData,
+      vehiclePassages,
     };
   }
 
   /**
-   * Weekly Report: 7-day movement, daily totals, location-wise comparison
+   * Weekly Report: 7-day movement, daily totals, location-wise comparison + passage timings
    */
   public static getWeeklyReport(startDate?: string, endDate?: string, locationId?: number) {
     const range = calculateDateRange('last7days', startDate, endDate);
@@ -76,6 +114,10 @@ export class ReportService {
     });
 
     const grandTotal = locationTotals.reduce((sum, l) => sum + l.total, 0);
+    const vehiclePassages = ReportService.getPassagesForDateFilter(
+      (d) => d >= range.startDate && d <= range.endDate,
+      locationId
+    );
 
     return {
       type: 'weekly',
@@ -84,11 +126,12 @@ export class ReportService {
       dailyBreakdown,
       locationTotals,
       grandTotal,
+      vehiclePassages,
     };
   }
 
   /**
-   * Monthly Report: Daily totals, total trucks per location, combined count, avg daily count
+   * Monthly Report: Daily totals, total trucks per location, combined count, avg daily count + passage timings
    */
   public static getMonthlyReport(yearMonth?: string, locationId?: number) {
     const today = new Date();
@@ -131,6 +174,7 @@ export class ReportService {
     });
 
     const averageDailyCount = Math.round((grandTotal / daysInMonth) * 10) / 10;
+    const vehiclePassages = ReportService.getPassagesForDateFilter((d) => d.startsWith(ym), locationId);
 
     return {
       type: 'monthly',
@@ -140,6 +184,7 @@ export class ReportService {
       locationTotals,
       grandTotal,
       averageDailyCount,
+      vehiclePassages,
     };
   }
 
@@ -199,6 +244,10 @@ export class ReportService {
     });
 
     const combinedAnnualCount = locationTotals.reduce((sum, l) => sum + l.total, 0);
+    const vehiclePassages = ReportService.getPassagesForDateFilter(
+      (d) => d.startsWith(String(year)),
+      locationId
+    );
 
     return {
       type: 'yearly',
@@ -206,6 +255,7 @@ export class ReportService {
       monthlyBreakdown,
       locationTotals,
       combinedAnnualCount,
+      vehiclePassages,
     };
   }
 
@@ -269,6 +319,18 @@ export class ReportService {
       rows.push('Month,Ghazipur,Okhla,Bhalaswa,Month Total');
       reportData.monthlyBreakdown.forEach((m: any) => {
         rows.push(`"${m.month}",${m.ghazipur || 0},${m.okhla || 0},${m.bhalaswa || 0},${m.total}`);
+      });
+    }
+
+    // Append Individual Truck Crossing Timings
+    if (reportData.vehiclePassages && reportData.vehiclePassages.length > 0) {
+      rows.push('');
+      rows.push('--- INDIVIDUAL TRUCK PASSAGE TIMINGS LOG ---');
+      rows.push('Passage #,Location,Date,Crossing Time (IST),Full Timestamp,Vehicle Type,Source,Status');
+      reportData.vehiclePassages.forEach((p: any) => {
+        rows.push(
+          `${p.passageNumber},"${p.locationName}",${p.date},${p.time},"${p.timestamp}","${p.vehicleType}","${p.detectionSource}","${p.status}"`
+        );
       });
     }
 
@@ -389,6 +451,53 @@ export class ReportService {
     sheet.columns.forEach((column) => {
       column.width = 20;
     });
+
+    // 2nd Sheet: Individual Truck Passage Timings
+    const passageSheet = workbook.addWorksheet('Truck Passage Timings');
+    passageSheet.columns = [
+      { header: 'Passage #', key: 'num', width: 14 },
+      { header: 'Location', key: 'loc', width: 20 },
+      { header: 'Date', key: 'date', width: 16 },
+      { header: 'Crossing Time (IST)', key: 'time', width: 22 },
+      { header: 'Full Timestamp', key: 'timestamp', width: 24 },
+      { header: 'Vehicle Classification', key: 'type', width: 28 },
+      { header: 'Detection Source', key: 'source', width: 22 },
+      { header: 'Wash Status', key: 'status', width: 20 },
+    ];
+
+    const passHeader = passageSheet.getRow(1);
+    passHeader.font = headerFont;
+    passHeader.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF065F46' }, // Emerald 800
+    };
+
+    if (reportData.vehiclePassages && reportData.vehiclePassages.length > 0) {
+      reportData.vehiclePassages.forEach((p: any) => {
+        passageSheet.addRow({
+          num: p.passageNumber,
+          loc: p.locationName,
+          date: p.date,
+          time: p.time,
+          timestamp: p.timestamp,
+          type: p.vehicleType,
+          source: p.detectionSource,
+          status: p.status,
+        });
+      });
+    } else {
+      passageSheet.addRow({
+        num: '-',
+        loc: 'No passages recorded for this period',
+        date: '-',
+        time: '-',
+        timestamp: '-',
+        type: '-',
+        source: '-',
+        status: '-',
+      });
+    }
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);

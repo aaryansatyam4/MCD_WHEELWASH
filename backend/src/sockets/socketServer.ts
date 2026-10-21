@@ -7,11 +7,27 @@ import type { StreamFrame } from '../camera/types.js';
 let io: SocketIOServer | null = null;
 
 // Callback registered by cameraManager to handle device camera frames
-let onDeviceFrameHandler: ((locationId: number, frameBase64: string) => void) | null = null;
+let onDeviceFrameHandler: ((
+  locationId: number,
+  frameBase64: string,
+  clientMetrics?: {
+    motionScore?: number;
+    spatialMassPercent?: number;
+    isHumanProfile?: boolean;
+  }
+) => void) | null = null;
 let onDeviceDisconnectHandler: ((locationId: number) => void) | null = null;
 
 export function registerDeviceCameraHandlers(
-  onFrame: (locationId: number, frameBase64: string) => void,
+  onFrame: (
+    locationId: number,
+    frameBase64: string,
+    clientMetrics?: {
+      motionScore?: number;
+      spatialMassPercent?: number;
+      isHumanProfile?: boolean;
+    }
+  ) => void,
   onDisconnect: (locationId: number) => void
 ) {
   onDeviceFrameHandler = onFrame;
@@ -46,13 +62,26 @@ export function initSocketServer(httpServer: HttpServer, corsOrigin: string): So
     logger.info(`Socket client connected: ${socket.id} (${user ? user.username : 'anonymous'})`);
 
     // Receive live frame uploaded from a browser device camera (USB / Bluetooth / Webcam / Mobile)
-    socket.on('camera:ingest_frame', (data: { locationId: number; frameBase64: string }) => {
-      if (data && data.locationId && data.frameBase64) {
-        if (onDeviceFrameHandler) {
-          onDeviceFrameHandler(data.locationId, data.frameBase64);
+    socket.on(
+      'camera:ingest_frame',
+      (data: {
+        locationId: number;
+        frameBase64: string;
+        motionScore?: number;
+        spatialMassPercent?: number;
+        isHumanProfile?: boolean;
+      }) => {
+        if (data && data.locationId && data.frameBase64) {
+          if (onDeviceFrameHandler) {
+            onDeviceFrameHandler(data.locationId, data.frameBase64, {
+              motionScore: data.motionScore,
+              spatialMassPercent: data.spatialMassPercent,
+              isHumanProfile: data.isHumanProfile,
+            });
+          }
         }
       }
-    });
+    );
 
     socket.on('camera:disconnect_device', (data: { locationId: number }) => {
       if (data && data.locationId && onDeviceDisconnectHandler) {

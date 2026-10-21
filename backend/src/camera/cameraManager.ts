@@ -156,16 +156,20 @@ export class CameraManager {
         pipeline.detector.processMotion(motionScore, spatialMassPercent, isHumanProfile);
       }
 
+      const currentStage = pipeline.detector.getStage();
+      const currentClassification = pipeline.detector.getClassification();
+      const currentConfidence = pipeline.detector.getConfidence();
+
       broadcastCameraFrame({
         locationId: pipeline.camera.location_id,
         cameraId: pipeline.camera.id,
         timestamp: getKolkataTimestamp(),
         frameBase64,
         motionScore,
-        isVehicleDetected: stage === 'IN_PASSAGE',
-        stage,
-        classification: pipeline.detector.getClassification(),
-        confidence: pipeline.detector.getConfidence(),
+        isVehicleDetected: currentStage === 'IN_PASSAGE' || currentClassification === 'TRUCK_VERIFIED',
+        stage: currentStage,
+        classification: currentClassification,
+        confidence: currentConfidence,
       });
     }, intervalMs);
 
@@ -175,15 +179,23 @@ export class CameraManager {
   /**
    * Handle incoming device camera frame from browser webcam / USB / Bluetooth camera
    */
-  public handleDeviceFrame(locationId: number, frameBase64: string): void {
+  public handleDeviceFrame(
+    locationId: number,
+    frameBase64: string,
+    clientMetrics?: {
+      motionScore?: number;
+      spatialMassPercent?: number;
+      isHumanProfile?: boolean;
+    }
+  ): void {
     const pipeline = this.pipelines.get(locationId);
     if (!pipeline) return;
 
     pipeline.activeSource = 'device';
     pipeline.lastDeviceFrameTime = Date.now();
 
-    // Estimate motion delta from incoming frame buffer
-    let motionScore = 5;
+    // Estimate motion delta from incoming frame buffer if not provided by client
+    let calculatedMotionScore = 5;
     try {
       const base64Data = frameBase64.replace(/^data:image\/\w+;base64,/, '');
       const currentBuffer = Buffer.from(base64Data, 'base64');
@@ -201,21 +213,36 @@ export class CameraManager {
 
         if (sampleCount > 0) {
           const avgDiff = diffSum / sampleCount; // 0 to 255
-          motionScore = Math.min(100, Math.round((avgDiff / 60) * 100));
+          calculatedMotionScore = Math.min(100, Math.round((avgDiff / 60) * 100));
         }
       }
       pipeline.prevDeviceSampleBuffer = currentBuffer;
     } catch {
-      motionScore = 15;
+      calculatedMotionScore = 15;
     }
 
-    const stage = pipeline.detector.getStage();
+    // Use optical spatial metrics from browser canvas if provided, or intelligent fallback
+    const effectiveMotion =
+      clientMetrics?.motionScore !== undefined ? clientMetrics.motionScore : calculatedMotionScore;
+    const effectiveMass =
+      clientMetrics?.spatialMassPercent !== undefined
+        ? clientMetrics.spatialMassPercent
+        : effectiveMotion < 40
+        ? 15
+        : effectiveMotion;
+    const effectiveIsHuman =
+      clientMetrics?.isHumanProfile !== undefined
+        ? clientMetrics.isHumanProfile
+        : effectiveMass < 30;
 
     // Process motion inside the detector with spatial analysis
     if (pipeline.camera.detection_enabled === 1) {
-      // For real camera feed, motionScore reflects optical shift. We evaluate spatial mass
-      pipeline.detector.processMotion(motionScore, motionScore, false);
+      pipeline.detector.processMotion(effectiveMotion, effectiveMass, effectiveIsHuman);
     }
+
+    const currentStage = pipeline.detector.getStage();
+    const currentClassification = pipeline.detector.getClassification();
+    const currentConfidence = pipeline.detector.getConfidence();
 
     // Broadcast frame to ALL connected users (Admin, Monitoring, Operators)
     broadcastCameraFrame({
@@ -223,11 +250,11 @@ export class CameraManager {
       cameraId: pipeline.camera.id,
       timestamp: getKolkataTimestamp(),
       frameBase64,
-      motionScore,
-      isVehicleDetected: stage === 'IN_PASSAGE',
-      stage,
-      classification: pipeline.detector.getClassification(),
-      confidence: pipeline.detector.getConfidence(),
+      motionScore: effectiveMotion,
+      isVehicleDetected: currentStage === 'IN_PASSAGE' || currentClassification === 'TRUCK_VERIFIED',
+      stage: currentStage,
+      classification: currentClassification,
+      confidence: currentConfidence,
     });
   }
 
@@ -290,6 +317,15 @@ export class CameraManager {
 
     pipeline.syntheticStreamer.triggerPassage();
     logger.info(`Simulated passage animation triggered for ${pipeline.locationName}`);
+    return true;
+  }
+
+  public triggerSimulatedHumanWalk(locationId: number): boolean {
+    const pipeline = this.pipelines.get(locationId);
+    if (!pipeline) return false;
+
+    pipeline.syntheticStreamer.triggerHumanWalk();
+    logger.info(`Simulated pedestrian walk animation triggered for ${pipeline.locationName}`);
     return true;
   }
 

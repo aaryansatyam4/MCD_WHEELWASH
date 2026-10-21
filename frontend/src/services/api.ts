@@ -189,6 +189,10 @@ export const demoService = {
     const res = await api.post('/demo/trigger-passage', { locationId });
     return res.data;
   },
+  triggerHumanWalk: async (locationId: number) => {
+    const res = await api.post('/demo/trigger-human-walk', { locationId });
+    return res.data;
+  },
   reloadDatabase: async () => {
     const res = await api.post('/demo/reload-database');
     return res.data;

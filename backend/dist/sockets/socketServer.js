@@ -37,7 +37,11 @@ export function initSocketServer(httpServer, corsOrigin) {
         socket.on('camera:ingest_frame', (data) => {
             if (data && data.locationId && data.frameBase64) {
                 if (onDeviceFrameHandler) {
-                    onDeviceFrameHandler(data.locationId, data.frameBase64);
+                    onDeviceFrameHandler(data.locationId, data.frameBase64, {
+                        motionScore: data.motionScore,
+                        spatialMassPercent: data.spatialMassPercent,
+                        isHumanProfile: data.isHumanProfile,
+                    });
                 }
             }
         });

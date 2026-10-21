@@ -29,6 +29,21 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
     }
   };
 
+  const handleTriggerHuman = async (locId: number, locName: string) => {
+    try {
+      setLoadingLoc(locId);
+      setMsg(null);
+      await demoService.triggerHumanWalk(locId);
+      setMsg(`Worker/pedestrian walking across ${locName} bay — AI filter should ignore counter!`);
+      if (onSimulationTriggered) onSimulationTriggered();
+      setTimeout(() => setMsg(null), 4000);
+    } catch (err: any) {
+      setMsg(err.response?.data?.error || 'Failed to trigger simulation.');
+    } finally {
+      setLoadingLoc(null);
+    }
+  };
+
   const handleDownloadExcel = () => {
     window.open('/public/database.xlsx', '_blank');
   };
@@ -63,7 +78,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold text-amber-800">Trigger Truck Passage:</span>
+          <span className="text-[11px] font-bold text-amber-800">Trigger Truck:</span>
 
           {canShowLocation(1) && (
             <button
@@ -97,6 +112,18 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({
               Bhalaswa (+1)
             </button>
           )}
+
+          <div className="h-4 w-px bg-amber-300 mx-1 hidden sm:block" />
+
+          {/* Test Pedestrian Filter Button */}
+          <button
+            onClick={() => handleTriggerHuman(authorizedLocationId || 1, 'Ghazipur')}
+            disabled={loadingLoc !== null}
+            title="Simulate a worker in safety vest walking across the bay. Counter will NOT increment!"
+            className="px-2.5 py-1 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold flex items-center gap-1 border border-amber-400 shadow-xs transition-colors text-[11px]"
+          >
+            <span>🚶 Test Worker Walk (No Count)</span>
+          </button>
 
           <div className="h-4 w-px bg-amber-300 mx-1 hidden sm:block" />
 
