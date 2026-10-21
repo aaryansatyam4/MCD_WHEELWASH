@@ -60,7 +60,7 @@ export class UserController {
         role,
         assigned_location_id: role === 'operator' ? Number(assigned_location_id) : null,
         active: 1,
-        must_change_password: 1, // Require password change on first login
+        must_change_password: 0,
         created_at: getKolkataTimestamp(),
         last_login: null,
       });
@@ -144,7 +144,7 @@ export class UserController {
 
       db.updateUser(id, {
         password_hash: passwordHash,
-        must_change_password: 1, // User must change password upon next login
+        must_change_password: 0,
       });
 
       AuditService.log(req.user!.id, 'RESET_PASSWORD', {
@@ -153,7 +153,7 @@ export class UserController {
       });
 
       res.json({
-        message: `Password reset successfully for user "${user.username}". Password must be changed upon next login.`,
+        message: `Password reset successfully for user "${user.username}" to 123456.`,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to reset password.' });
