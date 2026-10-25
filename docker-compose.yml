@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  wheelwash-monitor:
+    build: .
+    container_name: wheelwash-monitor
+    restart: always
+    ports:
+      - "5001:5001"
+    volumes:
+      # Persist the Excel database on host
+      - ./backend/public:/app/backend/public
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - TIMEZONE=Asia/Kolkata
